@@ -30,7 +30,7 @@ public class MainActivity extends AppCompatActivity {
             String action = intent.getAction();
             Log.d(TAG, "onReceive: " + action);
             // when discovery finds a device
-            if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
+            if (action != null && action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
                 final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
                 Log.d(TAG, "onReceive: action equals ACTION_STATE_CHANGED");
                 switch (state) {
@@ -73,11 +73,14 @@ public class MainActivity extends AppCompatActivity {
             Log.d(TAG, "enableBluetooth: Does not have capabilities.");
         }
         if (bluetoothAdapter.isEnabled()) {
+            Log.d(TAG, "enableBluetooth: bluetoothAdapter.isEnabled()");
             Intent enableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
             startActivity(enableIntent);
-
-            createAndRegBluetoothIntent();
+        } else {
+            //if the bluetooth adapter is not enabled then switch it on.
+            bluetoothAdapter.enable();
         }
+
     }
 
     //method which switch off the bluetooth
