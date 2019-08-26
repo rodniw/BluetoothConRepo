@@ -2,4 +2,6 @@
     <string name="app_name">BluetoothConRepo</string>
     <string name="enable_bluetooth">Enable bluetooth</string>
     <string name="disable_bluetooth">Disable bluetooth</string>
+    <string name="textview_text">TextView</string>
+    <string name="find_bluetooth_connections">Find bluetooth connections</string>
 </resources>

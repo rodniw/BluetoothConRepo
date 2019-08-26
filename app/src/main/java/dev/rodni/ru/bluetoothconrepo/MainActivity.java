@@ -1,16 +1,29 @@
 package dev.rodni.ru.bluetoothconrepo;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
+import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
-import android.widget.Button;
+import android.widget.ListView;
 import android.widget.TextView;
+
+import java.util.ArrayList;
+
+import dev.rodni.ru.bluetoothconrepo.broadcastreceivers.BroadcastReceiverBTState;
+import dev.rodni.ru.bluetoothconrepo.broadcastreceivers.BroadcastReceiverBTVisibility;
+import dev.rodni.ru.bluetoothconrepo.broadcastreceivers.BroadcastReceiverDeviceFounder;
 
 import static android.bluetooth.BluetoothAdapter.SCAN_MODE_CONNECTABLE;
 import static android.bluetooth.BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE;
@@ -25,67 +38,27 @@ import static android.bluetooth.BluetoothAdapter.STATE_TURNING_ON;
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
 
+    public static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 9000;
+
     private BluetoothAdapter bluetoothAdapter;
-    private TextView startButton, stopButton, startDiscoveringButton;
+    private TextView startButton, stopButton, makeVisibilityForDiscoverButton, startDiscoveringDevices;
+    private ListView listView;
+
+    //list of devices to connect with
+    private ArrayList<BluetoothDevice> BTDevices = new ArrayList<>();
+
+    private DeviceListAdapter adapter;
+
+    private boolean isLocationPermissionGranted = false;
 
     //creating a broadcast broadcastReceiver for catching the bluetooth state
-    private final BroadcastReceiver broadcastReceiverBTState = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            final String action = intent.getAction();
-            Log.d(TAG, "onReceive: " + action);
-            // when discovery finds a device
-            if (action != null && action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
-                final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
-                Log.d(TAG, "onReceive: action equals ACTION_STATE_CHANGED");
-                switch (state) {
-                    case STATE_OFF:
-                        Log.d(TAG, "onReceive: STATE_OFF");
-                        break;
-                    case STATE_TURNING_OFF:
-                        Log.d(TAG, "onReceive: STATE_TURNING_OFF");
-                        break;
-                    case STATE_ON:
-                        Log.d(TAG, "onReceive: STATE_ON");
-                        break;
-                    case STATE_TURNING_ON:
-                        Log.d(TAG, "onReceive: STATE_TURNING_ON");
-                        break;
-                }
-            }
-        }
-    };
+    private final BroadcastReceiverBTState broadcastReceiverBTState = new BroadcastReceiverBTState();
 
     //creating a broadcast broadcastReceiver for catching the bluetooth state
-    private final BroadcastReceiver broadcastReceiverBTDiscover = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            final String action = intent.getAction();
-            Log.d(TAG, "onReceive: " + action);
-            // when discovery finds a device
-            if (action != null && action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
-                final int mode = intent.getIntExtra(BluetoothAdapter.EXTRA_SCAN_MODE, BluetoothAdapter.ERROR);
-                Log.d(TAG, "onReceive: action equals ACTION_STATE_CHANGED");
-                switch (mode) {
-                    case SCAN_MODE_CONNECTABLE_DISCOVERABLE:
-                        Log.d(TAG, "onReceive: Discoverability enabled.");
-                        break;
-                    case SCAN_MODE_CONNECTABLE:
-                        Log.d(TAG, "onReceive: Discoverability disabled. Able to receive connections.");
-                        break;
-                    case SCAN_MODE_NONE:
-                        Log.d(TAG, "onReceive: Discoverability disabled. Not able to receive connections.");
-                        break;
-                    case STATE_CONNECTING:
-                        Log.d(TAG, "onReceive: Connecting.");
-                        break;
-                    case STATE_CONNECTED:
-                        Log.d(TAG, "onReceive: Connected.");
-                        break;
-                }
-            }
-        }
-    };
+    private final BroadcastReceiverBTVisibility broadcastReceiverBTVisibility = new BroadcastReceiverBTVisibility();
+
+    //creating a broadcast broadcastReceiver for catching the bluetooth state
+    private final BroadcastReceiverDeviceFounder broadcastReceiverDeviceFounder = new BroadcastReceiverDeviceFounder();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -94,15 +67,17 @@ public class MainActivity extends AppCompatActivity {
 
         startButton = findViewById(R.id.start_btn);
         stopButton = findViewById(R.id.stop_button);
-        startDiscoveringButton = findViewById(R.id.start_BT_discovering_button);
+        makeVisibilityForDiscoverButton = findViewById(R.id.make_BT_visibility_to_discoverable_button);
+        startDiscoveringDevices = findViewById(R.id.discover_devices_button);
 
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
+        checkPermissionsGranted();
+
         startButton.setOnClickListener(view -> enableBluetooth());
-
         stopButton.setOnClickListener(view -> disableBluetooth());
-
-        startDiscoveringButton.setOnClickListener(view -> startConnectionsDiscovery());
+        makeVisibilityForDiscoverButton.setOnClickListener(view -> makeVisibleToDiscovery());
+        startDiscoveringDevices.setOnClickListener(view -> discoverDevices());
     }
 
     //method which switch on the bluetooth
@@ -131,15 +106,35 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    //method which starts searching for devices to connect with
+    private void discoverDevices() {
+        Log.d(TAG, "discoverDevices: looking for unpaired devices.");
+
+        if (bluetoothAdapter.isDiscovering()) {
+            Log.d(TAG, "discoverDevices: canceling discovering devices");
+            bluetoothAdapter.cancelDiscovery();
+
+            if (isLocationPermissionGranted) {
+                bluetoothAdapter.startDiscovery();
+                createAndRegBluetoothIntent(broadcastReceiverDeviceFounder, BluetoothDevice.ACTION_FOUND);
+            }
+        } else if (!bluetoothAdapter.isDiscovering()) {
+            if (isLocationPermissionGranted) {
+                bluetoothAdapter.startDiscovery();
+                createAndRegBluetoothIntent(broadcastReceiverDeviceFounder, BluetoothDevice.ACTION_FOUND);
+            }
+        }
+    }
+
     //by calling this method a device will start discovering for connections with other devices
-    private void startConnectionsDiscovery() {
-        Log.d(TAG, "startConnectionsDiscovery: called");
+    private void makeVisibleToDiscovery() {
+        Log.d(TAG, "makeVisibleToDiscovery: called");
 
         Intent discoverableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
         discoverableIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300);
         startActivity(discoverableIntent);
 
-        createAndRegBluetoothIntent(broadcastReceiverBTDiscover, BluetoothAdapter.ACTION_SCAN_MODE_CHANGED);
+        createAndRegBluetoothIntent(broadcastReceiverBTVisibility, BluetoothAdapter.ACTION_SCAN_MODE_CHANGED);
     }
 
     //method that send broadcast about bluetooth connectivity
@@ -148,6 +143,33 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, "createAndRegBluetoothIntent: called");
         IntentFilter bluetoothIntent = new IntentFilter(state);
         registerReceiver(receiver, bluetoothIntent);
+    }
+
+    private void checkPermissionsGranted() {
+        if (ContextCompat.checkSelfPermission(this.getApplicationContext(),
+                android.Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+            isLocationPermissionGranted = true;
+        } else {
+            Log.d(TAG, "requestPermissions: ");
+            //this requestPermissions shows us a dialog which asks for the permission
+            ActivityCompat.requestPermissions(this,
+                    new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION},
+                    PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String permissions[], @NonNull int[] grantResults) {
+        Log.d(TAG, "onRequestPermissionsResult: ");
+        isLocationPermissionGranted = false;
+        if (requestCode == PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION) {
+            // If request is cancelled, the result arrays are empty.
+            if (grantResults.length > 0
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                isLocationPermissionGranted = true;
+            }
+        }
     }
 
     //unregister my receiver inside on destroy
