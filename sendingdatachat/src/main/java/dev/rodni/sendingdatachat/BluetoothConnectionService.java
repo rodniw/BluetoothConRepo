@@ -9,6 +9,9 @@ import android.content.Context;
 import android.util.Log;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.Charset;
 import java.util.UUID;
 
 public class BluetoothConnectionService {
@@ -28,6 +31,7 @@ public class BluetoothConnectionService {
     //threads
     private AcceptThread insecureAcceptThread;
     private ConnectThread connectThread;
+    private ConnectedThread connectedThread;
 
     //set this properties through the constructor
     private final BluetoothAdapter bluetoothAdapter;
@@ -79,9 +83,9 @@ public class BluetoothConnectionService {
             }
 
             //checking for bluetoothSocket nullability
-            //if (bluetoothSocket != null) {
-            //    connected(bluetoothSocket, device);
-            //}
+            if (bluetoothSocket != null) {
+                connected(bluetoothSocket, device);
+            }
         }
 
         //this cancel method is simply close server socket
@@ -145,14 +149,14 @@ public class BluetoothConnectionService {
                 }
                 Log.d(TAG, "run: ConnectThread: Could not connect to UUID: " + MY_UUID_INSECURE );
             }
-            //connected(bluetoothSocket, device);
+            connected(bluetoothSocket, device);
         }
         public void cancel() {
             try {
                 Log.d(TAG, "cancel: Closing Client Socket.");
                 bluetoothSocket.close();
             } catch (IOException e) {
-                Log.e(TAG, "cancel: close() of mmSocket in Connectthread failed. " + e.getMessage());
+                Log.e(TAG, "cancel: close() of bluetoothSocket in Connectthread failed. " + e.getMessage());
             }
         }
     }
@@ -188,5 +192,100 @@ public class BluetoothConnectionService {
 
         connectThread = new ConnectThread(device, uuid);
         connectThread.start();
+    }
+
+    /**
+     Finally the ConnectedThread which is responsible for maintaining the BTConnection, Sending the data, and
+     receiving incoming data through input/output streams respectively.
+     **/
+    private class ConnectedThread extends Thread {
+        private final BluetoothSocket bluetoothSocket;
+        //threads to write and read data
+        private final InputStream inputStream;
+        private final OutputStream outputStream;
+
+        public ConnectedThread(BluetoothSocket socket) {
+            Log.d(TAG, "ConnectedThread: Starting.");
+
+            bluetoothSocket = socket;
+            InputStream tmpIn = null;
+            OutputStream tmpOut = null;
+
+            //dismiss the progressdialog when connection is established
+            try {
+                progressDialog.dismiss();
+            } catch (NullPointerException e) {
+                e.printStackTrace();
+            }
+
+            try {
+                tmpIn = bluetoothSocket.getInputStream();
+                tmpOut = bluetoothSocket.getOutputStream();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            inputStream = tmpIn;
+            outputStream = tmpOut;
+        }
+
+        public void run() {
+            byte[] buffer = new byte[1024];  // buffer store for the stream
+
+            int bytes; // bytes returned from read()
+
+            // Keep listening to the InputStream until an exception occurs
+            while (true) {
+                // Read from the InputStream
+                try {
+                    bytes = inputStream.read(buffer);
+                    String incomingMessage = new String(buffer, 0, bytes);
+                    Log.d(TAG, "InputStream: " + incomingMessage);
+                } catch (IOException e) {
+                    Log.e(TAG, "write: Error reading Input Stream. " + e.getMessage());
+                    break;
+                }
+            }
+        }
+
+        //Call this from the main activity to send data to the remote device
+        public void write(byte[] bytes) {
+            String text = new String(bytes, Charset.defaultCharset());
+            Log.d(TAG, "write: Writing to outputstream: " + text);
+            try {
+                outputStream.write(bytes);
+            } catch (IOException e) {
+                Log.e(TAG, "write: Error writing to output stream. " + e.getMessage());
+            }
+        }
+
+        /* Call this from the main activity to shutdown the connection */
+        public void cancel() {
+            try {
+                bluetoothSocket.close();
+            } catch (IOException e) {
+                Log.d(TAG, "cancel: " + e.getMessage());
+            }
+        }
+    }
+
+    private void connected(BluetoothSocket mmSocket, BluetoothDevice mmDevice) {
+        Log.d(TAG, "connected: Starting.");
+        // Start the thread to manage the connection and perform transmissions
+        connectedThread = new ConnectedThread(mmSocket);
+        connectedThread.start();
+    }
+
+    /**
+     * Write to the ConnectedThread in an unsynchronized manner
+     *
+     * @param out The bytes to write
+     * @see ConnectedThread#write(byte[])
+     */
+    public void write(byte[] out) {
+        // Synchronize a copy of the ConnectedThread
+        Log.d(TAG, "write: Write Called.");
+        //perform the write
+        connectedThread.write(out);
     }
 }
