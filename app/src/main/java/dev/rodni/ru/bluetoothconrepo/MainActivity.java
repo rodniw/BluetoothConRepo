@@ -20,6 +20,7 @@ import android.widget.ListView;
 import android.widget.TextView;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import dev.rodni.ru.bluetoothconrepo.broadcastreceivers.BroadcastReceiverBTState;
 import dev.rodni.ru.bluetoothconrepo.broadcastreceivers.BroadcastReceiverBTVisibility;
@@ -45,8 +46,10 @@ public class MainActivity extends AppCompatActivity {
     private ListView listView;
 
     //list of devices to connect with
-    private ArrayList<BluetoothDevice> BTDevices = new ArrayList<>();
+    private static List<BluetoothDevice> BTDevices = new ArrayList<>();
 
+    //for the list view
+    private ListView listDevices;
     private DeviceListAdapter adapter;
 
     private boolean isLocationPermissionGranted = false;
@@ -69,6 +72,10 @@ public class MainActivity extends AppCompatActivity {
         stopButton = findViewById(R.id.stop_button);
         makeVisibilityForDiscoverButton = findViewById(R.id.make_BT_visibility_to_discoverable_button);
         startDiscoveringDevices = findViewById(R.id.discover_devices_button);
+        listDevices = findViewById(R.id.devices_list_view);
+
+        adapter = new DeviceListAdapter(this, R.layout.item_device_list, BTDevices);
+        listDevices.setAdapter(adapter);
 
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
@@ -172,12 +179,18 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    //unregister my receiver inside on destroy
-    //maybe its better to do it inside onStop ------ FIND INFO ABOUT IT
-    @Override
-    protected void onDestroy() {
-        Log.d(TAG, "onDestroy: called");
-        super.onDestroy();
-        unregisterReceiver(broadcastReceiverBTState);
+    public static void addDeviceToListDevices(BluetoothDevice device) {
+        BTDevices.add(device);
     }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        bluetoothAdapter.cancelDiscovery();
+        //unregister my receiver inside onStop
+        unregisterReceiver(broadcastReceiverBTState);
+        unregisterReceiver(broadcastReceiverBTVisibility);
+        unregisterReceiver(broadcastReceiverDeviceFounder);
+    }
+
 }

@@ -1,21 +1,22 @@
 package dev.rodni.ru.bluetoothconrepo.broadcastreceivers;
 
-import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.util.Log;
 
-import static android.bluetooth.BluetoothAdapter.SCAN_MODE_CONNECTABLE;
-import static android.bluetooth.BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE;
-import static android.bluetooth.BluetoothAdapter.SCAN_MODE_NONE;
-import static android.bluetooth.BluetoothAdapter.STATE_CONNECTED;
-import static android.bluetooth.BluetoothAdapter.STATE_CONNECTING;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import dev.rodni.ru.bluetoothconrepo.MainActivity;
 
 //broadcastReceiver for catching the bluetooth state
 public class BroadcastReceiverDeviceFounder extends BroadcastReceiver {
     private static final String TAG = "BroadcastReceiverDevice";
+
+    private List<BluetoothDevice> devices = new ArrayList<>();
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -23,25 +24,10 @@ public class BroadcastReceiverDeviceFounder extends BroadcastReceiver {
         Log.d(TAG, "onReceive: " + action);
         // when discovery finds a device
         if (action != null && action.equals(BluetoothDevice.ACTION_FOUND)) {
-            final int mode = intent.getIntExtra(BluetoothAdapter.EXTRA_SCAN_MODE, BluetoothAdapter.ERROR);
-            Log.d(TAG, "onReceive: action equals ACTION_STATE_CHANGED");
-            switch (mode) {
-                case SCAN_MODE_CONNECTABLE_DISCOVERABLE:
-                    Log.d(TAG, "onReceive: Discoverability enabled.");
-                    break;
-                case SCAN_MODE_CONNECTABLE:
-                    Log.d(TAG, "onReceive: Discoverability disabled. Able to receive connections.");
-                    break;
-                case SCAN_MODE_NONE:
-                    Log.d(TAG, "onReceive: Discoverability disabled. Not able to receive connections.");
-                    break;
-                case STATE_CONNECTING:
-                    Log.d(TAG, "onReceive: Connecting.");
-                    break;
-                case STATE_CONNECTED:
-                    Log.d(TAG, "onReceive: Connected.");
-                    break;
-            }
+            BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+            Log.d(TAG, "onReceive: BluetoothDevice.EXTRA_DEVICE");
+            MainActivity.addDeviceToListDevices(device);
+            Log.d(TAG, "onReceive: " + Arrays.toString(device.getUuids()) + "\n" + device.getAddress());
         }
     }
 }
