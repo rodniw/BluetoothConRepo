@@ -16,12 +16,15 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.widget.AdapterView;
 import android.widget.ListView;
 import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import dev.rodni.ru.bluetoothconrepo.broadcastreceivers.BroadcastReceiverBTPair;
 import dev.rodni.ru.bluetoothconrepo.broadcastreceivers.BroadcastReceiverBTState;
 import dev.rodni.ru.bluetoothconrepo.broadcastreceivers.BroadcastReceiverBTVisibility;
 import dev.rodni.ru.bluetoothconrepo.broadcastreceivers.BroadcastReceiverDeviceFounder;
@@ -36,14 +39,13 @@ import static android.bluetooth.BluetoothAdapter.STATE_ON;
 import static android.bluetooth.BluetoothAdapter.STATE_TURNING_OFF;
 import static android.bluetooth.BluetoothAdapter.STATE_TURNING_ON;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements ListView.OnItemClickListener{
     private static final String TAG = "MainActivity";
 
     public static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 9000;
 
     private BluetoothAdapter bluetoothAdapter;
     private TextView startButton, stopButton, makeVisibilityForDiscoverButton, startDiscoveringDevices;
-    private ListView listView;
 
     //list of devices to connect with
     private static List<BluetoothDevice> BTDevices = new ArrayList<>();
@@ -51,6 +53,8 @@ public class MainActivity extends AppCompatActivity {
     //for the list view
     private ListView listDevices;
     private DeviceListAdapter adapter;
+
+    private IntentFilter intentFilter;
 
     private boolean isLocationPermissionGranted = false;
 
@@ -62,6 +66,9 @@ public class MainActivity extends AppCompatActivity {
 
     //creating a broadcast broadcastReceiver for catching the bluetooth state
     private final BroadcastReceiverDeviceFounder broadcastReceiverDeviceFounder = new BroadcastReceiverDeviceFounder();
+
+    //creating a broadcast broadcastReceiver for catching the bluetooth pairing between devices
+    private final BroadcastReceiverBTPair broadcastReceiverBTPair = new BroadcastReceiverBTPair();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -76,6 +83,10 @@ public class MainActivity extends AppCompatActivity {
 
         adapter = new DeviceListAdapter(this, R.layout.item_device_list, BTDevices);
         listDevices.setAdapter(adapter);
+        listDevices.setOnItemClickListener(MainActivity.this);
+
+        //broadcasts when bond state changed
+        createAndRegBluetoothIntent(broadcastReceiverBTPair, BluetoothDevice.ACTION_BOND_STATE_CHANGED);
 
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
@@ -191,6 +202,15 @@ public class MainActivity extends AppCompatActivity {
         unregisterReceiver(broadcastReceiverBTState);
         unregisterReceiver(broadcastReceiverBTVisibility);
         unregisterReceiver(broadcastReceiverDeviceFounder);
+        unregisterReceiver(broadcastReceiverBTPair);
+    }
+
+    @Override
+    public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+        bluetoothAdapter.cancelDiscovery();
+        Log.d(TAG, "onItemClick: clicked");
+
+        BTDevices.get(i).createBond();
     }
 
 }
