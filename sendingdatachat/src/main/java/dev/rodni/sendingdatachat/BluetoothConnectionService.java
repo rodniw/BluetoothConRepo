@@ -40,6 +40,7 @@ public class BluetoothConnectionService {
     public BluetoothConnectionService(Context context) {
         this.bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         this.context = context;
+        start();
     }
 
     /**
