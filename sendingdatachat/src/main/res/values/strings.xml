@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">sendingdatachat</string>
+    <string name="on_off">ON/OFF</string>
+    <string name="enable_discoverable">Enable Discoverable</string>
+    <string name="discover">Discover</string>
+    <string name="start_connection">Start Connection</string>
+    <string name="enter_text_here">Enter Text Here</string>
+    <string name="send">SEND</string>
 </resources>
